@@ -19,30 +19,42 @@ namespace WorkoutTelegramBot
     {
         static async Task Main(string[] args)
         {
-            Console.WriteLine("Reading appsettings..");
-            var settings = await AppSettings.LoadAsync();
-            Console.WriteLine("Initializing botclient...");
-            var contextFactory = new WorkoutContextFactory(settings.WorkoutDatabaseConnectionString);
-            using (var context = contextFactory.CreateDbContext())
+            try
             {
-                Console.WriteLine("Applying migrations..");
-                await context.Database.MigrateAsync();
+                ApplicationWideLogger.LogUnhandledExceptions();
+                ApplicationWideLogger.Trace("Reading appsettings..");
+                var settings = await AppSettings.LoadAsync();
+                ApplicationWideLogger.Trace("Initializing botclient...");
+                var contextFactory = new WorkoutContextFactory(settings.WorkoutDatabaseConnectionString);
+                using (var context = contextFactory.CreateDbContext())
+                {
+                    ApplicationWideLogger.Trace("Applying migrations..");
+                    await context.Database.MigrateAsync();
+                }
+
+                var botClient = new WorkoutBot(settings.BotToken, settings.GroupChatId, contextFactory);
+
+                do
+                {
+                    ApplicationWideLogger.Trace("Writing daily message..");
+                    await botClient.WriteDailyMessage();
+
+                    var tomorow = DateTime.Now.AddDays(1);
+                    var fiveAmTomorrow = new DateTime(tomorow.Year, tomorow.Month, tomorow.Day, 0, 5, 0);
+                    var timeTowait = fiveAmTomorrow - DateTime.Now;
+
+                    ApplicationWideLogger.Trace($"Waiting ~{timeTowait:hh\\:mm} before writing again");
+                    await Task.Delay(timeTowait);
+                } while (true);
             }
-
-            var botClient = new WorkoutBot(settings.BotToken, settings.GroupChatId, contextFactory);
-
-            do
+            catch (Exception ex)
             {
-                Console.WriteLine("Writing daily message..");
-                await botClient.WriteDailyMessage();
-
-                var tomorow = DateTime.Now.AddDays(1);
-                var fiveAmTomorrow = new DateTime(tomorow.Year, tomorow.Month, tomorow.Day, 0 , 5, 0);
-                var timeTowait = fiveAmTomorrow - DateTime.Now;
-
-                Console.WriteLine($"Waiting ~{timeTowait:hh\\:mm} before writing again");
-                await Task.Delay(timeTowait);
-            } while (true);
+                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.Message);
+                Console.WriteLine("Unhandled terminating exception!");
+                Console.WriteLine("Press any key to exit");
+                Console.ReadKey();
+            }
         }
     }
 }

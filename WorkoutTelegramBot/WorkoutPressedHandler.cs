@@ -14,7 +14,7 @@ namespace WorkoutTelegramBot
 
         public Task HandleError(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
         {
-            Console.WriteLine($"Exception caught {exception}");
+            ApplicationWideLogger.Error(exception, $"Exception caught {exception}");
             return Task.CompletedTask;
         }
 
@@ -34,12 +34,14 @@ namespace WorkoutTelegramBot
 
         private Task Log(string v)
         {
-            Console.WriteLine(v);
+            ApplicationWideLogger.Trace(v);
             return Task.CompletedTask;
         }
 
         private async Task CallbackQueryReceived(CallbackQuery callbackQuery)
         {
+            ApplicationWideLogger.LogMethodStart();
+            
             var user = callbackQuery.From;
             var workout = WorkoutCallbackDataFactory.FromJson(callbackQuery.Data);
             //callbackQuery.
@@ -65,6 +67,7 @@ namespace WorkoutTelegramBot
             }
 
             await Task.WhenAll(handlerTasks);
+            ApplicationWideLogger.LogMethodEnd();
         }
 
         public event EventHandler<WorkoutEventArgs> WorkoutReceived;
