@@ -30,7 +30,6 @@ namespace WorkoutTelegramBot
             string baseUrl = null
         ) : base(token, httpClient, baseUrl)
         {
-            GroupChatId = groupChatId;
             ContextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
             UpdateHandler = new WorkoutPressedHandler();
             UpdateHandler.WorkoutReceivedAsync += UpdateHandler_WorkoutReceived;
@@ -49,8 +48,6 @@ namespace WorkoutTelegramBot
         #region Public Properties
 
         public IDbContextFactory<WorkoutContext> ContextFactory { get; }
-
-        public long GroupChatId { get; }
 
         public bool IsRunning { get; private set; }
 
@@ -83,42 +80,60 @@ namespace WorkoutTelegramBot
             ApplicationWideLogger.LogMethodStart();
             using var workoutContext = this.ContextFactory.CreateDbContext();
 
-            ApplicationWideLogger.Debug("Loading daily message;");
-            var dailyMessage = await workoutContext.DailyWorkoutMessages.FirstOrDefaultAsync(e => e.Date.Date == DateTime.Now.Date);
+            ApplicationWideLogger.Debug("Loading Groupchats with daily workout messages and subscriptions..");
+            var groupChats = await workoutContext.Chats
+                .Include(e => e.DailyWorkoutMessages)
+                .Include(e => e.Subscriptions)
+                    .ThenInclude(e => e.WorkoutPlan)
+                .AsNoTracking()
+                .ToArrayAsync()
+            ;
 
-            if (dailyMessage != null)
+            foreach (var chat in groupChats)
             {
-                // message of the day already exists
-                ApplicationWideLogger.Debug("Daily message already exists");
-                return;
+                ApplicationWideLogger.Trace($"Working on {chat.FriendlyName}..");
+
+                var dailyMessage = chat.DailyWorkoutMessages.FirstOrDefault(e => e.Date.Date == DateTime.Now.Date);
+
+                if (dailyMessage != null)
+                {
+                    // message of the day already exists
+                    ApplicationWideLogger.Debug($"Daily message already exists for Groupchat {chat.FriendlyName}");
+                    continue;
+                }
+
+                ApplicationWideLogger.Debug("Creating new daily message..");
+                using var transaction = await workoutContext.Database.BeginTransactionAsync();
+                var excercises = chat.Subscriptions
+                        .Select(e => e.WorkoutPlan)
+                        .ToArray();
+
+                dailyMessage = new DailyWorkoutMessage
+                {
+                    Date = DateTime.Now.Date,
+                    GroupChatId = chat.Id,
+                };
+                dailyMessage.SetBaseMessage(excercises);
+
+                // add to tracking and save to get the id
+                workoutContext.DailyWorkoutMessages.Add(dailyMessage);
+                ApplicationWideLogger.Debug("Saving..");
+                await workoutContext.SaveChangesAsync();
+
+                ApplicationWideLogger.Debug("Sending new telegram message..");
+                var message = await this.SendTextMessageAsync(
+                    chatId: chat.TelegramGroupChatId,
+                    text: TrainingMessage.GenerateMessage(dailyMessage),
+                    replyMarkup: TrainingMessage.GenerateKeyboard(dailyMessage, excercises)
+                );
+
+                ApplicationWideLogger.Debug("Saving message..");
+                dailyMessage.TelegramMessageId = message.MessageId;
+                await workoutContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                ApplicationWideLogger.Trace($"Finished with {chat.FriendlyName}..");
             }
-
-            ApplicationWideLogger.Debug("Creating new daily message..");
-            WorkoutPlan[] excercises = await workoutContext.WorkoutPlans
-                    .AsNoTracking()
-                    .ToArrayAsync();
-
-            dailyMessage = new DailyWorkoutMessage
-            {
-                Date = DateTime.Now.Date,
-            };
-            dailyMessage.SetBaseMessage(excercises);
-
-            // add to tracking and save to get the id
-            workoutContext.DailyWorkoutMessages.Add(dailyMessage);
-            ApplicationWideLogger.Debug("Saving..");
-            await workoutContext.SaveChangesAsync();
-
-            ApplicationWideLogger.Debug("Sending new telegram message..");
-            var message = await this.SendTextMessageAsync(
-                chatId: GroupChatId,
-                text: TrainingMessage.GenerateMessage(dailyMessage),
-                replyMarkup: TrainingMessage.GenerateKeyboard(dailyMessage, excercises)
-            );
-
-            ApplicationWideLogger.Debug("Saving message..");
-            dailyMessage.TelegramMessageId = message.MessageId;
-            await workoutContext.SaveChangesAsync();
             ApplicationWideLogger.LogMethodEnd();
         }
 
@@ -184,6 +199,7 @@ namespace WorkoutTelegramBot
             }
 
             var dailyWorkoutMessage = await workoutContext.DailyWorkoutMessages
+                .Include(e => e.GroupChat)
                 .Include(e => e.CompletedUsers)
                     .ThenInclude(e => e.WorkoutPlan)
                 .Include(e => e.CompletedUsers)
@@ -230,7 +246,7 @@ namespace WorkoutTelegramBot
 
             ApplicationWideLogger.Debug("Editing Telegram Message..");
             await this.EditMessageTextAsync(
-                chatId: GroupChatId,
+                chatId: dailyWorkoutMessage.GroupChat.TelegramGroupChatId,
                 messageId: dailyWorkoutMessage.TelegramMessageId,
                 text: TrainingMessage.GenerateMessage(dailyWorkoutMessage),
                 replyMarkup: TrainingMessage.GenerateKeyboard(dailyWorkoutMessage, excercises)

@@ -22,9 +22,9 @@ namespace WorkoutTelegramBot
             try
             {
                 ApplicationWideLogger.LogUnhandledExceptions();
-                ApplicationWideLogger.Trace("Reading appsettings..");
+                ApplicationWideLogger.Trace("Reading AppSettings..");
                 var settings = await AppSettings.LoadAsync();
-                ApplicationWideLogger.Trace("Initializing botclient...");
+                ApplicationWideLogger.Trace("Initializing Botclient...");
                 var contextFactory = new WorkoutContextFactory(settings.WorkoutDatabaseConnectionString);
                 using (var context = contextFactory.CreateDbContext())
                 {
