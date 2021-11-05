@@ -54,11 +54,11 @@ namespace WorkoutTelegramBot.Database
             modelBuilder.Entity<GroupChat>().HasData(new[]
             {
                 new GroupChat("Old Group", -1001538744570) { Id = 1 },
-                new GroupChat("Chad", -1548157689) { Id = 2 },
-                new GroupChat("Legs", -1763737479) { Id = 3 },
-                new GroupChat("Chest", -1761385598) { Id = 4 },
-                new GroupChat("Arms", -1476505107) { Id = 5 },
-                new GroupChat("Abs", -1742607664) { Id = 6 },
+                new GroupChat("Chad", -1001548157689) { Id = 2 },
+                new GroupChat("Legs", -1001763737479) { Id = 3 },
+                new GroupChat("Chest", -1001761385598) { Id = 4 },
+                new GroupChat("Arms", -1001476505107) { Id = 5 },
+                new GroupChat("Abs", -1001742607664) { Id = 6 },
             });
 
             int subscriptionId = 1;
