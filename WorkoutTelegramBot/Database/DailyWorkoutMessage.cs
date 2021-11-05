@@ -36,6 +36,10 @@ namespace WorkoutTelegramBot.Database
 
         public int TelegramMessageId { get; set; }
 
+        public int GroupChatId { get; set; }
+
+        public virtual GroupChat GroupChat { get; set; }
+
         /// <summary>
         /// Sets the <see cref="BaseMessage"/> and returns it
         /// </summary>

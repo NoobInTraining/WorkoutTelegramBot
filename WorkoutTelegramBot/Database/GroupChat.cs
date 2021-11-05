@@ -7,6 +7,7 @@ namespace WorkoutTelegramBot.Database
     {
         #region Public Constructors
 
+        
         public GroupChat()
         {
 
@@ -29,6 +30,7 @@ namespace WorkoutTelegramBot.Database
         public string FriendlyName { get; set; }
 
         public virtual ICollection<Subscription> Subscriptions { get; set; } = new List<Subscription>();
+        public virtual ICollection<DailyWorkoutMessage> DailyWorkoutMessages { get; set; } = new List<DailyWorkoutMessage>();
 
         public long TelegramGroupChatId { get; set; }
 
