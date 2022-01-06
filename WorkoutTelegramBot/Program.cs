@@ -40,8 +40,8 @@ namespace WorkoutTelegramBot
                     await botClient.WriteDailyMessage();
 
                     var tomorow = DateTime.Now.AddDays(1);
-                    var fiveAmTomorrow = new DateTime(tomorow.Year, tomorow.Month, tomorow.Day, 0, 5, 0);
-                    var timeTowait = fiveAmTomorrow - DateTime.Now;
+                    var sevenAmTomorrow = new DateTime(tomorow.Year, tomorow.Month, tomorow.Day, 7, 0, 0);
+                    var timeTowait = sevenAmTomorrow - DateTime.Now;
 
                     ApplicationWideLogger.Trace($"Waiting ~{timeTowait:hh\\:mm} before writing again");
                     await Task.Delay(timeTowait);
