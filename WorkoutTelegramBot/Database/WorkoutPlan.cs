@@ -32,7 +32,7 @@ namespace WorkoutTelegramBot.Database
 
         public int GetAmount(DateTime date)
         {
-            var multipliyer = date.DayOfYear / IncrementIntervallInDays;
+            var multipliyer = (int) Math.Ceiling((double) date.DayOfYear / IncrementIntervallInDays);
             return multipliyer * Increment;
         }
 
