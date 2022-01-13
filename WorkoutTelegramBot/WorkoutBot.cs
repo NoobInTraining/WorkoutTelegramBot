@@ -164,6 +164,43 @@ namespace WorkoutTelegramBot
             ApplicationWideLogger.LogMethodEnd();
         }
 
+        private async Task UpdateDailyMessageAsync(TelegramUser user, WorkoutPlan workoutPlan, DailyWorkoutMessage dailyWorkoutMessage)
+        {
+            var completedDay = dailyWorkoutMessage.CompletedUsers
+                .Where(e => e.TelegramUserId == user.Id)
+                .Where(e => e.WorkoutPlanId == workoutPlan.Id)
+                .FirstOrDefault();
+
+            if (completedDay == null)
+            {
+                // finished completing challenge - add him
+                ApplicationWideLogger.Info("User completed challenge..");
+                dailyWorkoutMessage.CompletedUsers.Add(new CompletedWorkout
+                {
+                    TelegramUser = user,
+                    TelegramUserId = user.Id,
+                    WorkoutPlan = workoutPlan,
+                    WorkoutPlanId = workoutPlan.Id,
+                });
+            }
+            else
+            {
+                // already completed, remove him
+                ApplicationWideLogger.Info("User deleted his completion..");
+                dailyWorkoutMessage.CompletedUsers.Remove(completedDay);
+            }
+
+            var excercises = dailyWorkoutMessage.GroupChat.Subscriptions.Select(e => e.WorkoutPlan);
+
+            ApplicationWideLogger.Debug("Editing Telegram Message..");
+            await this.EditMessageTextAsync(
+                chatId: dailyWorkoutMessage.GroupChat.TelegramGroupChatId,
+                messageId: dailyWorkoutMessage.TelegramMessageId,
+                text: TrainingMessage.GenerateMessage(dailyWorkoutMessage),
+                replyMarkup: TrainingMessage.GenerateKeyboard(dailyWorkoutMessage, excercises)
+            );
+        }
+
         private async Task UpdateHandler_WorkoutReceived(object sender, WorkoutEventArgs eventArgs)
         {
             ApplicationWideLogger.LogMethodStart();
@@ -198,61 +235,41 @@ namespace WorkoutTelegramBot
                 System.Diagnostics.Debugger.Break();
             }
 
-            var dailyWorkoutMessage = await workoutContext.DailyWorkoutMessages
+            var date = await workoutContext.DailyWorkoutMessages
+                .Where(e => e.Id == eventArgs.Workout.DailyWorkoutMessageId)
+                .Select(e => e.Date)
+                .FirstOrDefaultAsync();
+
+            if (date == default)
+            {
+                ApplicationWideLogger.Logger.Error("Daily Message konnte nicht gefunden");
+                System.Diagnostics.Debugger.Break();
+            }
+
+            var subscribedGroupChatIds = await workoutContext.Subscriptions
+                .Where(e => e.WorkoutPlanId == workoutPlan.Id)
+                .Select(e => e.ChatId)
+                .ToArrayAsync();
+
+            var dailyWorkoutMessages = await workoutContext.DailyWorkoutMessages
                 .Include(e => e.GroupChat)
+                    .ThenInclude(e => e.Subscriptions)
+                        .ThenInclude(e => e.WorkoutPlan)
                 .Include(e => e.CompletedUsers)
                     .ThenInclude(e => e.WorkoutPlan)
                 .Include(e => e.CompletedUsers)
                     .ThenInclude(e => e.TelegramUser)
-                .FirstOrDefaultAsync(e => e.Id == eventArgs.Workout.DailyWorkoutMessageId);
+                .Where(e => e.Date.Date == date.Date)
+                .Where(e => subscribedGroupChatIds.Contains(e.GroupChatId))
+                .ToArrayAsync();
 
-            if (dailyWorkoutMessage == null)
+            foreach (var message in dailyWorkoutMessages)
             {
-                // todo errorhandling
-                ApplicationWideLogger.Logger.Error("Daily Message nicht gefunden");
-                System.Diagnostics.Debugger.Break();
-            }
-
-            var completedDay = dailyWorkoutMessage.CompletedUsers
-                .Where(e => e.TelegramUserId == user.Id)
-                .Where(e => e.WorkoutPlanId == workoutPlan.Id)
-                .FirstOrDefault();
-
-            if (completedDay == null)
-            {
-                // finished completing challenge - add him
-                ApplicationWideLogger.Info("User completed challenge..");
-                dailyWorkoutMessage.CompletedUsers.Add(new CompletedWorkout
-                {
-                    TelegramUser = user,
-                    TelegramUserId = user.Id,
-                    WorkoutPlan = workoutPlan,
-                    WorkoutPlanId = workoutPlan.Id,
-                });
-            }
-            else
-            {
-                // already completed, remove him
-                ApplicationWideLogger.Info("User deleted his completion..");
-                workoutContext.Remove(completedDay);
+                await UpdateDailyMessageAsync(user, workoutPlan, message);
             }
 
             ApplicationWideLogger.Debug("Saving changes..");
             workoutContext.SaveChanges();
-
-            WorkoutPlan[] excercises = await workoutContext.WorkoutPlans
-                    .AsNoTracking()
-                    .ToArrayAsync();
-
-            ApplicationWideLogger.Debug("Editing Telegram Message..");
-            await this.EditMessageTextAsync(
-                chatId: dailyWorkoutMessage.GroupChat.TelegramGroupChatId,
-                messageId: dailyWorkoutMessage.TelegramMessageId,
-                text: TrainingMessage.GenerateMessage(dailyWorkoutMessage),
-                replyMarkup: TrainingMessage.GenerateKeyboard(dailyWorkoutMessage, excercises)
-            );
-
-            ApplicationWideLogger.Debug("Saving changes..");
             await AnswerCallbackQueryAsync(eventArgs.CallbackQuery.Id);
 
             ApplicationWideLogger.LogMethodEnd();
