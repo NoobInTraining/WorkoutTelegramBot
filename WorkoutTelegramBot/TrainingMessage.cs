@@ -24,7 +24,9 @@ namespace WorkoutTelegramBot
             sb.AppendLine();
 
             var finishedUsersGrouped = dailyMessage.CompletedUsers
-                .ToLookup(c => c.WorkoutPlan);
+                .GroupBy(c => c.WorkoutPlan)
+                .OrderBy(e => e.Key.Type)
+            ;
 
             foreach (var group in finishedUsersGrouped)
             {
