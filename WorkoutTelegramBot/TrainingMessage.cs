@@ -34,6 +34,8 @@ namespace WorkoutTelegramBot
                 {
                     sb.AppendLine($" - {user.TelegramUser}");
                 }
+
+                sb.AppendLine();
             }
 
             return sb.ToString();
