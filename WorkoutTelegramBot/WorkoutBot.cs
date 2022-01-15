@@ -93,6 +93,12 @@ namespace WorkoutTelegramBot
             {
                 ApplicationWideLogger.Trace($"Working on {chat.FriendlyName}..");
 
+                if (!chat.Subscriptions.Any())
+                {
+                    // No subscription --> no message.
+                    continue;
+                }
+
                 var dailyMessage = chat.DailyWorkoutMessages.FirstOrDefault(e => e.Date.Date == DateTime.Now.Date);
 
                 if (dailyMessage != null)
